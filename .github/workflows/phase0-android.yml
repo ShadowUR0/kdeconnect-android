@@ -1,0 +1,64 @@
+name: Android Phase 0 Build
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK platform
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-37" "build-tools;37.0.0"
+
+      - name: Build, lint, and unit test
+        shell: bash
+        run: |
+          set -o pipefail
+          chmod +x ./gradlew
+          ./gradlew --no-daemon -Pci --console=plain assembleDebug lintDebug testDebugUnitTest 2>&1 | tee phase0-android-build.log
+
+      - name: Record APK metadata
+        if: always()
+        shell: bash
+        run: |
+          find build/outputs/apk -type f -name '*.apk' -print -exec stat --format='size_bytes=%s' {} \; 2>/dev/null | tee phase0-apk-metadata.txt || true
+
+      - name: Upload Phase 0 build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-phase0-build
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            phase0-android-build.log
+            phase0-apk-metadata.txt
+            build/outputs/apk/debug/*.apk
+            build/reports/lint-results-debug.*
+            build/reports/tests/testDebugUnitTest/**
+            build/test-results/testDebugUnitTest/**
+            build/reports/dependency-license/**
