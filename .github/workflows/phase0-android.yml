@@ -36,7 +36,13 @@ jobs:
             SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
           fi
           "$SDKMANAGER" --version
+          set +o pipefail
           yes | "$SDKMANAGER" --licenses >/dev/null
+          sdk_rc=${PIPESTATUS[1]}
+          set -o pipefail
+          if [ "$sdk_rc" -ne 0 ]; then
+            exit "$sdk_rc"
+          fi
           "$SDKMANAGER" "platforms;android-37" "build-tools;37.0.0"
 
       - name: Build, lint, and unit test
